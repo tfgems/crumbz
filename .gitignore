@@ -1,0 +1,11 @@
+.keys/
+.env
+*.json
+!config-devnet.json
+!burn-records.json
+user_records/
+*.keypair
+*.secret
+node_modules/
+.DS_Store
+*.log

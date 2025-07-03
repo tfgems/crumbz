@@ -1,0 +1,11 @@
+{
+    "mint_address": "HBQHBXtFwgpVLD4QYkojBKWmu35h4cPSC8pD4zbeBRBN",
+    "decimals": 6,
+    "symbol": "CRUMBZ",
+    "name": "CRUMBZ",
+    "rpc_url": "https://api.devnet.solana.com",
+    "wallet_addresses": {
+        "game_wallet": "A6wvzFssHns2JRVfSkp7nPHCYzxSFdvLFUQD7d5GrFGz",
+        "test_wallet": "Bvk5hCRwfhxmSV32PkEQzT8UCvpPj65U4U7xZ1AJqdpJ"
+    }
+}

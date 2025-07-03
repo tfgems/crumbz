@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRUMBZ Token Transfer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 400px;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .token-info {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .token-info p {
+            margin: 0.5rem 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .response {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CRUMBZ Token Transfer</h1>
+        <form id="transferForm">
+            <div class="form-group">
+                <label for="address">Recipient Address</label>
+                <input type="text" id="address" required placeholder="Enter Solana address">
+            </div>
+            <div class="form-group">
+                <label for="amount">Amount (CRUMBZ)</label>
+                <input type="number" id="amount" required min="1" placeholder="Enter amount">
+            </div>
+            <button type="submit">Transfer</button>
+        </form>
+        <div id="response" class="response"></div>
+        
+        <h2>Burn CRUMBZ</h2>
+        <form id="burnForm">
+            <div class="form-group">
+                <label for="burnAmount">Amount to BURN (CRUMBZ)</label>
+                <input type="number" id="burnAmount" required min="1" placeholder="Enter amount to burn">
+            </div>
+            <button type="submit">BURN</button>
+        </form>
+        <h2>Mint CRUMBZ</h2>
+        <form id="mintForm">
+            <div class="form-group">
+                <label for="mintAmount">Amount to MINT (CRUMBZ)</label>
+                <input type="number" id="mintAmount" required min="1" placeholder="Enter amount to mint">
+            </div>
+            <button type="submit">MINT</button>
+        </form>
+    </div>
+
+    <script src="script.js" defer></script>
+</body>
+</html>
