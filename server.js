@@ -10,6 +10,7 @@ const {
 const path = require('path');
 const http = require('http');
 const helmet = require('helmet');
+const fs = require('fs');
 
 // Configure helmet with custom CSP
 const csp = helmet.contentSecurityPolicy({
@@ -24,42 +25,38 @@ const csp = helmet.contentSecurityPolicy({
     }
 });
 
-// Initialize server and middleware
-const PORT = process.env.PORT || 3000;
-const app = express();
-const server = http.createServer(app);
+// Load configuration
+const config = require('./config-devnet.json');
+console.log('Loaded config:', config);
 
-// Middleware
-app.use(express.json());
-app.use(csp);
+// Configuration
+const MINT_ADDRESS = config.mint_address;
+const TOKEN_DECIMALS = config.decimals;
+const TOKEN_SYMBOL = config.symbol;
+const TOKEN_NAME = config.name;
 
-// Serve static files from frontend directory
-app.use(express.static(path.join(__dirname, 'frontend'), {
-    setHeaders: (res, path, stat) => {
-        if (path.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript');
-        }
-    }
-}));
-
-// Serve static files from frontend directory
-app.use(express.static(path.join(__dirname, 'frontend'), {
-    setHeaders: (res, path, stat) => {
-        if (path.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript');
-        }
-    }
-}));
-
-// Handle root path
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+console.log('Using config:', {
+    mintAddress: MINT_ADDRESS,
+    decimals: TOKEN_DECIMALS,
+    symbol: TOKEN_SYMBOL,
+    name: TOKEN_NAME
 });
+
+// Remove duplicate config loading
+if (typeof config === 'undefined') {
+    console.error('Config file not found or invalid');
+    process.exit(1);
+}
+
+// Initialize Solana connection and game wallet
+const connection = new Connection(config.rpc_url || 'https://api.devnet.solana.com', 'confirmed');
+const walletData = JSON.parse(fs.readFileSync('game-wallet.json', 'utf8'));
+const gameWallet = Keypair.fromSecretKey(Uint8Array.from(walletData.privateKey));
+const gameWalletPublicKey = new PublicKey(walletData.publicKey);
 
 // Load your keypair
 let keypair;
 try {
-    //const keypairData = require('/Users/fastindemand/Documents/Projects/2025/SOLANA/.keys/crumbz_token-keypair.json');
     const keypairData = require('./.keys/crumbz_token-keypair.json');
     console.log('Key data loaded successfully');
     
@@ -84,25 +81,72 @@ try {
     process.exit(1);
 }
 
-// Load configuration
-const config = require('./config.json');
-console.log('Loaded config:', config);
+// Initialize server and middleware
+const PORT = process.env.PORT || 3000;
+const app = express();
+const server = http.createServer(app);
 
-// Configuration
-const MINT_ADDRESS = config.mint_address;
-const TOKEN_DECIMALS = config.decimals;
-const TOKEN_SYMBOL = config.symbol;
-const TOKEN_NAME = config.name;
+// Middleware
+app.use(express.json());
+app.use(csp);
+app.use(express.static(path.join(__dirname, 'frontend'), {
+    setHeaders: (res, path, stat) => {
+        if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        }
+    }
+}));
 
-console.log('Using config:', {
-    mintAddress: MINT_ADDRESS,
-    decimals: TOKEN_DECIMALS,
-    symbol: TOKEN_SYMBOL,
-    name: TOKEN_NAME
+// Serve static files from frontend directory
+
+// Handle root path
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
 });
 
-// Initialize Solana connection
-const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+// Handle claim endpoint
+app.post('/api/claim', async (req, res) => {
+    try {
+        console.log('=== Claim Transaction Started ===');
+        console.log('Request received:', { body: req.body });
+        const { userAddress, amount } = req.body;
+
+        if (!userAddress) {
+            return res.status(400).json({ error: 'User address is required' });
+        }
+
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ error: 'Invalid amount' });
+        }
+
+        // Get user's token account
+        const userTokenAccount = await getOrCreateAssociatedTokenAccount(
+            connection,
+            gameWallet,
+            new PublicKey(config.mint_address),
+            new PublicKey(userAddress)
+        );
+
+        // Load user's record
+        const userRecordPath = getUserRecordPath(new PublicKey(userAddress));
+        let userRecord = await loadUserRecord(new PublicKey(userAddress));
+
+        // Add to pending claims
+        userRecord.pendingClaims = userRecord.pendingClaims || [];
+        userRecord.pendingClaims.push({
+            address: userAddress,
+            amount: parseFloat(amount)
+        });
+
+        // Save updated record
+        await saveUserRecord(new PublicKey(userAddress), userRecord);
+
+        res.json({ success: true, message: 'Claim recorded. Waiting for 0.01 SOL...' });
+    } catch (error) {
+        console.error('Error in claim:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // Middleware
 app.use(express.json());
@@ -110,42 +154,7 @@ app.use(express.static(__dirname));
 
 // Routes
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Get keypair balance
-app.get('/api/balance', async (req, res) => {
-    try {
-        const balance = await connection.getBalance(keypair.publicKey);
-        res.json({
-            balance: balance / 1e9, // Convert lamports to SOL
-            address: keypair.publicKey.toString()
-        });
-    } catch (error) {
-        console.error('Error getting balance:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Get token balance
-app.get('/api/token-balance', async (req, res) => {
-    try {
-        const tokenAccount = await getOrCreateAssociatedTokenAccount(
-            connection,
-            keypair,
-            new PublicKey(MINT_ADDRESS),
-            keypair.publicKey
-        );
-        const balance = await connection.getTokenAccountBalance(tokenAccount.address);
-        res.json({
-            balance: balance.value.uiAmount,
-            address: keypair.publicKey.toString(),
-            mint: MINT_ADDRESS
-        });
-    } catch (error) {
-        console.error('Error getting token balance:', error);
-        res.status(500).json({ error: error.message });
-    }
+    res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
 });
 
 app.post('/api/burn', async (req, res) => {

@@ -5,9 +5,9 @@ CRUMBZ is a Solana-based token burn tracking system that monitors token transfer
 ## Features
 
 - Real-time token transfer monitoring using WebSocket
-- Automatic token burning upon receipt
-- Persistent burn record tracking per user
-- Local JSON file storage for burn records (working on decentralized storage)
+- Automatic token minting when 0.01 SOL is received
+- Pending claim tracking for token requests
+- Local JSON file storage for user records
 - Simple and efficient implementation using JavaScript
 
 ## Project Structure
@@ -17,8 +17,8 @@ crumbz/
 ├── .keys/              # Contains private key files
 ├── assets/             # Design assets (not tracked in git)
 ├── frontend/           # Frontend UI files
-├── user_records/       # User-specific burn records
-├── burn-tracker-client.js   # Main burn tracking implementation
+├── user_records/       # User-specific token records
+├── token-monitor.js    # Main token monitoring implementation
 ├── config-devnet.json  # Configuration file
 ├── server.js           # Express server for frontend
 ├── mint-tokens.js      # Token minting script

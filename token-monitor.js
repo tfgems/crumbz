@@ -102,67 +102,56 @@ async function logFinalBalances(tokenAccount, sender) {
 // Helper function to record a burn
 async function recordBurn(tokenAccount, amount, sender) {
     try {
-        // If amount is a string, convert it to BigInt
-        const bigAmount = typeof amount === 'string' ? BigInt(amount) : amount;
+        const record = await loadUserRecord(sender);
         
-        // Get current balance
-        const accountInfo = await getAccount(connection, tokenAccount);
+        // Convert amount to number if it's a BigInt
+        const amountNum = validateTokenAmount(amount, TOKEN_DECIMALS);
         
-        // Validate the amount
-        const burnAmount = validateTokenAmount(bigAmount, TOKEN_DECIMALS);
+        // Update burn record
+        record.burnedTokens = (record.burnedTokens || 0) + amountNum;
+        record.inGameTokens = (record.inGameTokens || 0) + amountNum;
         
-        // Check if we have enough balance
-        if (Number(accountInfo.amount) < Number(burnAmount)) {
-            throw new Error(`Insufficient balance. Available: ${formatTokenAmount(accountInfo.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}, Required: ${formatTokenAmount(burnAmount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`);
+        // Check if there are pending claims
+        if (record.pendingClaims) {
+            for (let i = 0; i < record.pendingClaims.length; i++) {
+                const claim = record.pendingClaims[i];
+                if (claim.address === sender.toString()) {
+                    // If the amount matches or exceeds the claim amount
+                    if (amountNum >= claim.amount) {
+                        // Mint tokens to the user
+                        const mintIx = createMintToInstruction(
+                            MINT_ADDRESS,
+                            tokenAccount,
+                            gameWallet.publicKey,
+                            claim.amount * Math.pow(10, TOKEN_DECIMALS)
+                        );
+                        
+                        // Create transaction
+                        const transaction = new Transaction();
+                        transaction.add(mintIx);
+                        
+                        // Sign and send
+                        const signature = await connection.sendTransaction(transaction, [gameWallet]);
+                        await connection.confirmTransaction(signature);
+                        
+                        console.log('Claim fulfilled:', {
+                            signature: signature,
+                            address: claim.address,
+                            amount: claim.amount
+                        });
+                    }
+                }
+            }
         }
         
-        console.log(`Current ${TOKEN_SYMBOL} balance: ${formatTokenAmount(accountInfo.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`);
-        console.log(`Attempting to burn: ${formatTokenAmount(burnAmount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`);
-        
-        // Convert amount back to BigInt for burn instruction
-        const burnAmountBigInt = BigInt(burnAmount);
-        
-        // Create burn instruction
-        const burnInstruction = createBurnInstruction(
-            tokenAccount,
-            MINT_ADDRESS,
-            gameWallet.publicKey,
-            burnAmountBigInt,
-            [],
-            TOKEN_PROGRAM_ID
-        );
-        
-        // Create and send transaction
-        const transaction = new Transaction().add(burnInstruction);
-        
-        // Send and confirm transaction
-        const signature = await connection.sendTransaction(transaction, [gameWallet]);
-        await connection.confirmTransaction(signature);
-        
-        console.log(`Burn transaction confirmed: ${signature}`);
-        
-        // Load and update user's record
-        const userRecord = await loadUserRecord(sender);
-        const currentTokens = BigInt(userRecord.inGameTokens || '0');
-        const newTokens = currentTokens + BigInt(burnAmount);
-        
         // Save updated record
-        await saveUserRecord(sender, {
-            inGameTokens: newTokens.toString()
-        });
-
-        console.log(await loadUserRecord(sender));
-
-        return {
-            success: true,
-            inGameTokens: newTokens.toString()
-        };
-
+        await saveUserRecord(sender, record);
         
-
+        // Log final balances
+        await logFinalBalances(tokenAccount, sender);
     } catch (error) {
-        console.error('Error recording burn:', error);
-        return { success: false, error: error.message };
+        console.error('Error in recordBurn:', error);
+        throw error;
     }
 }
 
@@ -197,6 +186,7 @@ async function checkStatus() {
     }
 }
 
+// Update the monitorTokenAccount function to use the new recordBurn function
 async function monitorTokenAccount() {
     try {
         console.log('Starting token account monitor...');
@@ -317,9 +307,6 @@ async function monitorTokenAccount() {
 
         // Start initial subscription
         setupSubscription();
-        
-
-        
         console.log('Monitoring started. Press Ctrl+C to stop.');
         
         // Keep the process running
@@ -331,3 +318,5 @@ async function monitorTokenAccount() {
 
 // Call the monitorTokenAccount function
 monitorTokenAccount();
+
+// End of file

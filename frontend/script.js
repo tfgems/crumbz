@@ -64,40 +64,115 @@ async function handleTransferSubmit(e) {
 transferForm.addEventListener('submit', handleTransferSubmit);
 transferButton.addEventListener('click', handleTransferSubmit);
 
-// Event handler for mint form
-const mintForm = document.getElementById('mintForm');
-const mintButton = mintForm.querySelector('button');
-const mintAmountInput = document.getElementById('mintAmount');
+// Event handler for claim functionality
+const userAddressInput = document.getElementById('userAddress');
+const claimAmountInput = document.getElementById('claimAmount');
+const claimButton = document.getElementById('claimButton');
+const solBalanceElement = document.getElementById('solBalance');
+const claimResponseElement = document.getElementById('claimResponse');
 
-async function handleMintSubmit(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    console.log('Form submit event caught');
-    
-    const amount = mintAmountInput.value;
-    console.log('Amount from form:', amount);
-    
-    if (!amount || amount <= 0) {
-        console.error('Invalid amount:', amount);
-        showResponse('Please enter a valid amount greater than 0', 'error');
-        return;
-    }
+// Initialize Solana connection
+let connection;
 
-    console.log('Sending mint request...');
+async function initializeSolana() {
     try {
-        const response = await fetch('/api/mint', {
+        connection = new window.solana.Connection('https://api.devnet.solana.com', 'confirmed');
+        console.log('Solana connection initialized');
+        
+        // Update SOL balance every 5 seconds
+        setInterval(updateSolBalance, 5000);
+    } catch (error) {
+        console.error('Error initializing Solana:', error);
+    }
+}
+
+async function updateSolBalance() {
+    try {
+        if (!userAddressInput.value) {
+            solBalanceElement.textContent = 'Please enter your Solana address';
+            claimButton.disabled = true;
+            return;
+        }
+
+        const publicKey = new window.solana.PublicKey(userAddressInput.value);
+        const balance = await connection.getBalance(publicKey);
+        const balanceSol = window.solana.LAMPORTS_PER_SOL;
+        
+        solBalanceElement.textContent = `SOL Balance: ${balance / balanceSol} SOL`;
+        
+        // Enable claim button if address is valid and amount is entered
+        claimButton.disabled = !claimAmountInput.value;
+    } catch (error) {
+        console.error('Error updating SOL balance:', error);
+        solBalanceElement.textContent = 'Invalid Solana address or error checking balance';
+        claimButton.disabled = true;
+    }
+}
+
+async function handleClaim() {
+    try {
+        const amount = claimAmountInput.value;
+        const userAddress = userAddressInput.value;
+        
+        if (!amount || amount <= 0) {
+            showResponse('Please enter a valid amount greater than 0', 'error');
+            return;
+        }
+
+        if (!userAddress) {
+            showResponse('Please enter your Solana address', 'error');
+            return;
+        }
+
+        // Send claim request
+        const response = await fetch('/api/claim', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
+                userAddress: userAddress,
                 amount: amount
             })
         });
-        console.log('API response status:', response.status);
-        
+
         const data = await response.json();
+        
+        if (data.success) {
+            showResponse(`Claim recorded! Waiting for 0.01 SOL...`, 'claim');
+            claimAmountInput.value = '';
+            userAddressInput.value = '';
+        } else {
+            showResponse(`Error: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showResponse(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Add event listeners
+claimButton.addEventListener('click', handleClaim);
+claimAmountInput.addEventListener('input', updateSolBalance);
+userAddressInput.addEventListener('input', updateSolBalance);
+
+// Helper function to show response messages
+function showResponse(message, type) {
+    const responseElement = type === 'claim' ? claimResponseElement : document.getElementById('response');
+    responseElement.className = `response ${type}`;
+    responseElement.textContent = message;
+    responseElement.style.display = 'block';
+    
+    // Hide response after 5 seconds
+    setTimeout(() => {
+        responseElement.style.display = 'none';
+    }, 5000);
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    initializeSolana();
+});
         console.log('API response data:', data);
         
         if (data.success) {

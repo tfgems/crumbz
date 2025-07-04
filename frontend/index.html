@@ -92,6 +92,22 @@
         </form>
         <div id="response" class="response"></div>
         
+        <h2>Claim CRUMBZ</h2>
+        <div class="token-info">
+            <div class="form-group">
+                <label for="userAddress">Your Solana Address</label>
+                <input type="text" id="userAddress" required placeholder="Enter your Solana address">
+            </div>
+            <div class="form-group">
+                <label for="claimAmount">Amount of CRUMBZ to Claim</label>
+                <input type="number" id="claimAmount" required min="0" step="0.01" placeholder="Enter amount to claim">
+            </div>
+            <p>Minimum SOL required: 0.01</p>
+            <div id="solBalance" class="sol-balance">Checking SOL balance...</div>
+            <button type="button" id="claimButton" disabled>Claim CRUMBZ</button>
+            <div id="claimResponse" class="response"></div>
+        </div>
+
         <h2>Burn CRUMBZ</h2>
         <form id="burnForm">
             <div class="form-group">
