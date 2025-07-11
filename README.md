@@ -6,9 +6,27 @@ CRUMBZ is a Solana-based token burn tracking system that monitors token transfer
 
 - Real-time token transfer monitoring using WebSocket
 - Automatic token minting when 0.01 SOL is received
+- Testnet SOL airdrop functionality (1 SOL)
 - Pending claim tracking for token requests
 - Local JSON file storage for user records
 - Simple and efficient implementation using JavaScript
+
+## Solana Devnet Airdrop
+
+The system now includes a Solana devnet airdrop feature that allows users to request 1 SOL for testing purposes. Key features include:
+
+- User-friendly interface for requesting 1 SOL airdrop
+- Real-time transaction status updates via WebSocket
+- Automatic transaction confirmation monitoring
+- Rate limiting error handling
+- No frontend Solana Web3.js dependency
+- Clean error handling and status updates
+
+To use the airdrop:
+1. Enter a valid Solana devnet address
+2. Click "Get 1 SOL (Devnet)"
+3. Monitor transaction status in real-time
+4. Note: Airdrop may be rate-limited by the Solana devnet faucet
 
 ## Project Structure
 
