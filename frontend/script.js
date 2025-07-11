@@ -62,184 +62,151 @@ async function handleTransferSubmit(e) {
 
 // Add event listeners for transfer form
 transferForm.addEventListener('submit', handleTransferSubmit);
-transferButton.addEventListener('click', handleTransferSubmit);
 
 // Event handler for claim functionality
 const userAddressInput = document.getElementById('userAddress');
-const claimAmountInput = document.getElementById('claimAmount');
-const claimButton = document.getElementById('claimButton');
-const solBalanceElement = document.getElementById('solBalance');
-const claimResponseElement = document.getElementById('claimResponse');
+const statusDiv = document.getElementById('status');
+const logsDiv = document.getElementById('logs');
+const airdropButton = document.getElementById('airdropButton');
+const airdropStatusDiv = document.getElementById('airdropStatus');
 
-// Initialize Solana connection
-let connection;
-
-async function initializeSolana() {
-    try {
-        connection = new window.solana.Connection('https://api.devnet.solana.com', 'confirmed');
-        console.log('Solana connection initialized');
-        
-        // Update SOL balance every 5 seconds
-        setInterval(updateSolBalance, 5000);
-    } catch (error) {
-        console.error('Error initializing Solana:', error);
-    }
+// Remove claim functionality since it's not in the HTML
+// This function is no longer needed
+function handleClaim() {
+    // No-op since we don't have a claim button anymore
 }
 
-async function updateSolBalance() {
+async function checkTransactionStatus(signature) {
     try {
-        if (!userAddressInput.value) {
-            solBalanceElement.textContent = 'Please enter your Solana address';
-            claimButton.disabled = true;
-            return;
+        // Use backend API to check transaction status
+        const response = await fetch(`/api/transaction-status?signature=${signature}`);
+        const data = await response.json();
+        
+        if (data.status === 'confirmed') {
+            return 'confirmed';
         }
-
-        const publicKey = new window.solana.PublicKey(userAddressInput.value);
-        const balance = await connection.getBalance(publicKey);
-        const balanceSol = window.solana.LAMPORTS_PER_SOL;
-        
-        solBalanceElement.textContent = `SOL Balance: ${balance / balanceSol} SOL`;
-        
-        // Enable claim button if address is valid and amount is entered
-        claimButton.disabled = !claimAmountInput.value;
+        return 'pending';
     } catch (error) {
-        console.error('Error updating SOL balance:', error);
-        solBalanceElement.textContent = 'Invalid Solana address or error checking balance';
-        claimButton.disabled = true;
+        console.error('Error checking transaction status:', error);
+        return 'error';
     }
 }
 
-async function handleClaim() {
+async function monitorTransaction(signature, address) {
+    // Use WebSocket for real-time updates instead of polling
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'subscribe',
+            signature: signature
+        }));
+    }
+}
+
+let ws = null;
+
+function connectWebSocket() {
+    if (ws) {
+        ws.close();
+    }
+    
+    ws = new WebSocket('ws://localhost:3000');
+    
+    ws.onopen = () => {
+        console.log('WebSocket connected');
+    };
+    
+    ws.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'transaction_update') {
+            updateStatus(`Transaction confirmed! Slot: ${data.slot}`);
+            addLog(`Transaction confirmed at slot ${data.slot}`, 'success');
+        } else if (data.type === 'error') {
+            updateStatus('Transaction error');
+            addLog(`WebSocket error: ${data.message}`, 'error');
+        }
+    };
+    
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        addLog('WebSocket connection error', 'error');
+    };
+    
+    ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        // Try to reconnect after 5 seconds
+        setTimeout(connectWebSocket, 5000);
+    };
+}
+
+async function handleAirdrop() {
     try {
-        const amount = claimAmountInput.value;
         const userAddress = userAddressInput.value;
-        
-        if (!amount || amount <= 0) {
-            showResponse('Please enter a valid amount greater than 0', 'error');
-            return;
-        }
-
         if (!userAddress) {
-            showResponse('Please enter your Solana address', 'error');
+            updateStatus('Please enter your Solana address', 'error');
+            addLog('Error: No address provided', 'error');
+            airdropButton.disabled = false;
             return;
         }
 
-        // Send claim request
-        const response = await fetch('/api/claim', {
+        // Disable button while processing
+        airdropButton.disabled = true;
+        updateStatus('Requesting 1 SOL airdrop...');
+        airdropStatusDiv.textContent = 'Requesting airdrop...';
+        
+        const response = await fetch('/api/airdrop', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                userAddress: userAddress,
-                amount: amount
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: userAddress })
         });
-
+        
         const data = await response.json();
         
         if (data.success) {
-            showResponse(`Claim recorded! Waiting for 0.01 SOL...`, 'claim');
-            claimAmountInput.value = '';
-            userAddressInput.value = '';
+            const signature = data.signature;
+            updateStatus(`Airdrop initiated! Transaction: ${signature}`);
+            airdropStatusDiv.textContent = `Airdrop initiated! Transaction: ${signature}`;
+            addLog(`Airdrop initiated! Transaction: ${signature}`, 'success');
+            
+            // Subscribe to transaction updates
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'subscribe',
+                    signature: signature
+                }));
+            }
         } else {
-            showResponse(`Error: ${data.error}`, 'error');
+            updateStatus(`Error: ${data.error}`, 'error');
+            airdropStatusDiv.textContent = `Error: ${data.error}`;
+            addLog(`Airdrop failed: ${data.error}`, 'error');
+            airdropButton.disabled = false;
         }
     } catch (error) {
-        console.error('Error:', error);
-        showResponse(`Error: ${error.message}`, 'error');
+        updateStatus(`Error: ${error.message}`, 'error');
+        airdropStatusDiv.textContent = `Error: ${error.message}`;
+        addLog(`Airdrop failed: ${error.message}`, 'error');
+        airdropButton.disabled = false;
     }
 }
 
-// Add event listeners
-claimButton.addEventListener('click', handleClaim);
-claimAmountInput.addEventListener('input', updateSolBalance);
-userAddressInput.addEventListener('input', updateSolBalance);
-
-// Helper function to show response messages
-function showResponse(message, type) {
-    const responseElement = type === 'claim' ? claimResponseElement : document.getElementById('response');
-    responseElement.className = `response ${type}`;
-    responseElement.textContent = message;
-    responseElement.style.display = 'block';
-    
-    // Hide response after 5 seconds
-    setTimeout(() => {
-        responseElement.style.display = 'none';
-    }, 5000);
+// Add event listener for airdrop button
+if (airdropButton) {
+    airdropButton.addEventListener('click', handleAirdrop);
 }
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    initializeSolana();
+    // Initialize WebSocket connection
+    connectWebSocket();
+    
+    // Initialize UI elements
+    if (!airdropButton) {
+        console.error('Airdrop button not found');
+    }
+    if (!userAddressInput) {
+        console.error('Address input not found');
+    }
 });
-        console.log('API response data:', data);
-        
-        if (data.success) {
-            showResponse(`Tokens minted successfully! Signature: ${data.signature}`, 'success');
-        } else {
-            showResponse(`Error: ${data.error}`, 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showResponse(`Error: ${error.message}`, 'error');
-    }
-}
-
-// Add event listeners for mint form
-mintForm.addEventListener('submit', handleMintSubmit);
-mintButton.addEventListener('click', handleMintSubmit);
-
-// Event handler for burn form
-const burnForm = document.getElementById('burnForm');
-const burnButton = burnForm.querySelector('button');
-const burnAmountInput = document.getElementById('burnAmount');
-
-async function handleBurnSubmit(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    console.log('Form submit event caught');
-    
-    const amount = burnAmountInput.value;
-    console.log('Amount from form:', amount);
-    
-    if (!amount || amount <= 0) {
-        console.error('Invalid amount:', amount);
-        showResponse('Please enter a valid amount greater than 0', 'error');
-        return;
-    }
-
-    console.log('Sending burn request...');
-    try {
-        const response = await fetch('/api/burn', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                amount: amount
-            })
-        });
-        console.log('API response status:', response.status);
-        
-        const data = await response.json();
-        console.log('API response data:', data);
-        
-        if (data.success) {
-            showResponse(`Tokens burned successfully!`, 'success');
-        } else {
-            showResponse(`Error: ${data.error}`, 'error');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        showResponse(`Error: ${error.message}`, 'error');
-    }
-}
-
-// Add event listeners for burn form
-burnForm.addEventListener('submit', handleBurnSubmit);
-burnButton.addEventListener('click', handleBurnSubmit);
 
 // Function to validate Solana address
 function isValidAddress(address) {
@@ -247,13 +214,34 @@ function isValidAddress(address) {
     return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
 }
 
+// Function to add log message
+function addLog(message, type = 'info') {
+    const logDiv = document.createElement('div');
+    logDiv.className = `log-entry log-${type}`;
+    logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    logsDiv.insertBefore(logDiv, logsDiv.firstChild);
+    
+    // Remove old logs if we have too many
+    if (logsDiv.children.length > 20) {
+        logsDiv.removeChild(logsDiv.lastChild);
+    }
+}
+
+// Function to update status message
+function updateStatus(message) {
+    statusDiv.textContent = message;
+}
+
 // Function to show response message
 function showResponse(message, type = 'success') {
-    const responseDiv = document.getElementById('response');
+    const responseDiv = document.createElement('div');
     responseDiv.className = `response ${type}`;
     responseDiv.textContent = message;
-    responseDiv.style.display = 'block';
+    document.body.appendChild(responseDiv);
+    
     setTimeout(() => {
-        responseDiv.style.display = 'none';
+        responseDiv.remove();
     }, 5000);
 }
+
+// Remove duplicate DOMContentLoaded event handler since we already have one above

@@ -1,5 +1,5 @@
 const express = require('express');
-const { Connection, PublicKey, Keypair, Transaction, SystemProgram } = require('@solana/web3.js');
+const { Connection, PublicKey, Keypair, Transaction, SystemProgram, LAMPORTS_PER_SOL } = require('@solana/web3.js');
 const { 
     TOKEN_PROGRAM_ID, 
     createTransferInstruction, 
@@ -16,12 +16,14 @@ const fs = require('fs');
 const csp = helmet.contentSecurityPolicy({
     directives: {
         defaultSrc: ["'none'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'"],
         connectSrc: ["'self'"],
         fontSrc: ["'self'"],
-        objectSrc: ["'none'"]
+        objectSrc: ["'none'"],
+        scriptSrcAttr: ["'unsafe-hashes'"],
+        hashAlgorithms: ['sha256']
     }
 });
 
@@ -86,6 +88,29 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 const server = http.createServer(app);
 
+// Handle errors
+server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use. Attempting to clean up...`);
+        // Try to kill any existing process on this port
+        const killPort = require('kill-port');
+        killPort(PORT)
+            .then(() => {
+                console.log(`Port ${PORT} cleaned up. Restarting server...`);
+                server.listen(PORT, () => {
+                    console.log(`Server running on port ${PORT}`);
+                });
+            })
+            .catch((err) => {
+                console.error('Failed to clean up port:', err);
+                process.exit(1);
+            });
+    } else {
+        console.error('Server error:', error);
+        process.exit(1);
+    }
+});
+
 // Middleware
 app.use(express.json());
 app.use(csp);
@@ -102,6 +127,41 @@ app.use(express.static(path.join(__dirname, 'frontend'), {
 // Handle root path
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
+});
+
+// Handle airdrop requests (devnet only)
+app.post('/api/airdrop', async (req, res) => {
+    try {
+        const { address } = req.body;
+        
+        if (!address) {
+            return res.status(400).json({ error: 'Address is required' });
+        }
+
+        // Validate address
+        try {
+            new PublicKey(address);
+        } catch (error) {
+            return res.status(400).json({ error: 'Invalid Solana address' });
+        }
+
+        // Airdrop 1 SOL to the address
+        const airdropAmount = 1 * LAMPORTS_PER_SOL;
+        const signature = await connection.requestAirdrop(new PublicKey(address), airdropAmount);
+        
+        // Return signature immediately
+        res.json({
+            success: true,
+            signature,
+            amount: 1,
+            message: 'Airdrop initiated. Waiting for confirmation...'
+        });
+    } catch (error) {
+        console.error('Airdrop error:', error);
+        res.status(500).json({ 
+            error: error.message || 'Failed to airdrop SOL' 
+        });
+    }
 });
 
 // Handle claim endpoint
@@ -302,6 +362,105 @@ app.post('/api/transfer', async (req, res) => {
         } else {
             res.status(500).json({ error: error.message });
         }
+    }
+});
+
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ server });
+
+// Store transaction subscriptions
+const transactionSubscriptions = new Map();
+
+// Handle WebSocket connections
+wss.on('connection', (ws) => {
+    console.log('New WebSocket connection');
+    
+    // Store subscriptions for this connection
+    const connectionSubscriptions = new Map();
+    
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+            if (data.type === 'subscribe' && data.signature) {
+                const signature = data.signature;
+                console.log('Subscribing to transaction:', signature);
+                
+                // Create subscription
+                const subscription = connection.onSignature(signature, 
+                    (result, context) => {
+                        console.log('Transaction update:', result);
+                        ws.send(JSON.stringify({
+                            type: 'transaction_update',
+                            signature,
+                            status: result.status,
+                            slot: context.slot
+                        }));
+                    },
+                    'confirmed'
+                );
+                
+                // Store subscription for this connection
+                connectionSubscriptions.set(signature, subscription);
+            }
+        } catch (error) {
+            console.error('WebSocket message error:', error);
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: error.message
+            }));
+        }
+    });
+    
+    ws.on('close', () => {
+        console.log('WebSocket connection closed');
+        // Clean up subscriptions for this connection
+        connectionSubscriptions.forEach((subscription, signature) => {
+            if (typeof subscription === 'function') {
+                subscription(); // Unsubscribe
+            }
+        });
+        connectionSubscriptions.clear();
+    });
+});
+
+app.post('/api/airdrop', async (req, res) => {
+    try {
+        console.log('=== Airdrop Request Received ===');
+        const { address } = req.body;
+        
+        // Validate address
+        if (!address) {
+            return res.status(400).json({
+                success: false,
+                error: 'Address is required'
+            });
+        }
+
+        try {
+            const publicKey = new PublicKey(address);
+        } catch (error) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid Solana address'
+            });
+        }
+
+        // Request airdrop of 1 SOL
+        const signature = await connection.requestAirdrop(address, 1 * 1e9);
+        
+        console.log('Airdrop successful:', { signature });
+        
+        return res.json({
+            success: true,
+            signature: signature.toString(),
+            message: '1 SOL airdropped successfully'
+        });
+    } catch (error) {
+        console.error('Airdrop error:', error);
+        return res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 

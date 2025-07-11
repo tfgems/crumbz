@@ -7,12 +7,11 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            line-height: 1.6;
             margin: 0;
-            background-color: #f0f2f5;
+            padding: 40px 20px;
+            max-width: 800px;
+            margin: 0 auto;
         }
         .container {
             background: white;
@@ -74,11 +73,75 @@
             background-color: #f8d7da;
             color: #721c24;
         }
+        .token-in.form-group {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .airdrop-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+
+        .airdrop-btn:hover {
+            background-color: #45a049;
+        }
+
+        .airdrop-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .airdropStatus {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>CRUMBZ Token Transfer</h1>
+        <h1>CRUMBZ Token Operations</h1>
+        <div class="token-info">
+            <div class="form-group">
+                <label for="userAddress">Your Solana Address:</label>
+                <input type="text" id="userAddress" 
+                       placeholder="Enter your Solana devnet address (e.g., Bvk5hCRwfhxmSV32PkEQzT8UCvpPj65U4U7xZ1AJqdpJ)"
+                       style="width: 100%; padding: 0.75rem; margin-bottom: 1rem;">
+                <small class="form-text text-muted">
+                    Enter a valid Solana devnet address to receive test SOL and perform token operations
+                </small>
+            </div>
+
+            <div class="form-group">
+                <h3>Test SOL Airdrop</h3>
+                <p>Get 1 SOL on Solana devnet for testing</p>
+                <button id="airdropButton" class="airdrop-btn">Get 1 SOL (Devnet)</button>
+                <div id="airdropStatus" class="airdropStatus"></div>
+            </div>
+
+            <div class="form-group">
+                <h3>Transaction Status</h3>
+                <div id="status" class="status"></div>
+            </div>
+
+            <div class="form-group">
+                <h3>Logs</h3>
+                <div id="logs" class="logs"></div>
+            </div>
+        </div>
+        <h2>Transfer CRUMBZ</h2>
         <form id="transferForm">
             <div class="form-group">
                 <label for="address">Recipient Address</label>
@@ -92,22 +155,6 @@
         </form>
         <div id="response" class="response"></div>
         
-        <h2>Claim CRUMBZ</h2>
-        <div class="token-info">
-            <div class="form-group">
-                <label for="userAddress">Your Solana Address</label>
-                <input type="text" id="userAddress" required placeholder="Enter your Solana address">
-            </div>
-            <div class="form-group">
-                <label for="claimAmount">Amount of CRUMBZ to Claim</label>
-                <input type="number" id="claimAmount" required min="0" step="0.01" placeholder="Enter amount to claim">
-            </div>
-            <p>Minimum SOL required: 0.01</p>
-            <div id="solBalance" class="sol-balance">Checking SOL balance...</div>
-            <button type="button" id="claimButton" disabled>Claim CRUMBZ</button>
-            <div id="claimResponse" class="response"></div>
-        </div>
-
         <h2>Burn CRUMBZ</h2>
         <form id="burnForm">
             <div class="form-group">
